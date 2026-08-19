@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import tempfile
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -11,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
-HISTORY_FILE = os.path.join(BASE_DIR, "sync_history.json")
+
+def get_history_file() -> str:
+    if os.environ.get("VERCEL"):
+        return os.path.join(tempfile.gettempdir(), "sync_history.json")
+    return os.path.join(BASE_DIR, "sync_history.json")
 
 class SyncManager:
     def __init__(self):
@@ -21,40 +26,51 @@ class SyncManager:
         self.garmin = GarminService()
 
     def load_config(self) -> Dict[str, Any]:
+        # Priority 1: config.json file
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load config.json: {e}")
+
+        # Priority 2: Environment variables
         return {
-            "renpho_email": "",
-            "renpho_password": "",
-            "garmin_email": "",
-            "garmin_password": "",
-            "weight_unit": "kg",  # 'kg' or 'lbs'
+            "renpho_email": os.environ.get("RENPHO_EMAIL", ""),
+            "renpho_password": os.environ.get("RENPHO_PASSWORD", ""),
+            "garmin_email": os.environ.get("GARMIN_EMAIL", ""),
+            "garmin_password": os.environ.get("GARMIN_PASSWORD", ""),
+            "weight_unit": os.environ.get("WEIGHT_UNIT", "kg"),
             "auto_sync": False
         }
 
     def save_config(self, new_config: Dict[str, Any]) -> Dict[str, Any]:
         self.config.update(new_config)
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(self.config, f, indent=2)
-        logger.info("Saved configuration to config.json.")
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=2)
+            logger.info("Saved configuration to config.json.")
+        except Exception as e:
+            logger.warning(f"Could not save config.json to disk (serverless/read-only mode): {e}")
         return self.config
 
     def load_history(self) -> Dict[str, Any]:
-        if os.path.exists(HISTORY_FILE):
+        hfile = get_history_file()
+        if os.path.exists(hfile):
             try:
-                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                with open(hfile, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                logger.error(f"Failed to load sync_history.json: {e}")
+                logger.error(f"Failed to load sync history: {e}")
         return {"synced_ids": {}, "logs": []}
 
     def save_history(self):
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(self.history, f, indent=2)
+        hfile = get_history_file()
+        try:
+            with open(hfile, "w", encoding="utf-8") as f:
+                json.dump(self.history, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save sync history to disk: {e}")
 
     def log_event(self, event_type: str, message: str, details: Optional[Dict[str, Any]] = None):
         entry = {
@@ -69,7 +85,6 @@ class SyncManager:
         self.save_history()
 
     def is_synced(self, measurement: RenphoMeasurement) -> bool:
-        # Check by measurement ID or exact date + weight combination
         mid = measurement.id
         if mid in self.history["synced_ids"]:
             return True
@@ -98,24 +113,43 @@ class SyncManager:
         self.history["synced_ids"][weight_key] = sync_record
         self.save_history()
 
-    def initialize_clients(self, mfa_code: Optional[str] = None):
-        renpho_email = self.config.get("renpho_email")
-        renpho_pw = self.config.get("renpho_password")
-        garmin_email = self.config.get("garmin_email")
-        garmin_pw = self.config.get("garmin_password")
+    def initialize_clients(
+        self,
+        renpho_email: Optional[str] = None,
+        renpho_password: Optional[str] = None,
+        garmin_email: Optional[str] = None,
+        garmin_password: Optional[str] = None,
+        mfa_code: Optional[str] = None
+    ):
+        r_email = renpho_email or self.config.get("renpho_email")
+        r_pw = renpho_password or self.config.get("renpho_password")
+        g_email = garmin_email or self.config.get("garmin_email")
+        g_pw = garmin_password or self.config.get("garmin_password")
 
-        if not renpho_email or not renpho_pw:
-            raise ValueError("Renpho credentials missing in configuration.")
-        if not garmin_email or not garmin_pw:
-            raise ValueError("Garmin credentials missing in configuration.")
+        if not r_email or not r_pw:
+            raise ValueError("Renpho email and password are required.")
+        if not g_email or not g_pw:
+            raise ValueError("Garmin email and password are required.")
+
+        # Re-instantiate services for request isolation
+        self.renpho = RenphoService(email=r_email, password=r_pw)
+        self.garmin = GarminService(email=g_email, password=g_pw)
 
         # Authenticate Renpho
-        self.renpho.login(renpho_email, renpho_pw)
+        self.renpho.login(r_email, r_pw)
         # Authenticate Garmin
-        self.garmin.login(garmin_email, garmin_pw, mfa_code=mfa_code)
+        self.garmin.login(g_email, g_pw, mfa_code=mfa_code)
 
-    def fetch_measurements(self, limit: int = 50) -> List[Dict[str, Any]]:
-        self.initialize_clients()
+    def fetch_measurements(
+        self,
+        limit: int = 50,
+        renpho_email: Optional[str] = None,
+        renpho_password: Optional[str] = None,
+        garmin_email: Optional[str] = None,
+        garmin_password: Optional[str] = None,
+        mfa_code: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        self.initialize_clients(renpho_email, renpho_password, garmin_email, garmin_password, mfa_code)
         measurements = self.renpho.get_measurements(limit=limit)
         results = []
         for m in measurements:
@@ -124,8 +158,15 @@ class SyncManager:
             results.append(m_dict)
         return results
 
-    def sync_latest(self) -> Dict[str, Any]:
-        self.initialize_clients()
+    def sync_latest(
+        self,
+        renpho_email: Optional[str] = None,
+        renpho_password: Optional[str] = None,
+        garmin_email: Optional[str] = None,
+        garmin_password: Optional[str] = None,
+        mfa_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        self.initialize_clients(renpho_email, renpho_password, garmin_email, garmin_password, mfa_code)
         measurements = self.renpho.get_measurements(limit=10)
         if not measurements:
             msg = "No Renpho measurements found to sync."
@@ -147,8 +188,16 @@ class SyncManager:
         self.log_event("SYNC_SUCCESS", msg, {"measurement": m_dict, "garmin_result": res})
         return {"status": "success", "message": msg, "measurement": m_dict, "result": res}
 
-    def sync_all_unsynced(self, limit: int = 100) -> Dict[str, Any]:
-        self.initialize_clients()
+    def sync_all_unsynced(
+        self,
+        limit: int = 100,
+        renpho_email: Optional[str] = None,
+        renpho_password: Optional[str] = None,
+        garmin_email: Optional[str] = None,
+        garmin_password: Optional[str] = None,
+        mfa_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        self.initialize_clients(renpho_email, renpho_password, garmin_email, garmin_password, mfa_code)
         measurements = self.renpho.get_measurements(limit=limit)
         synced_count = 0
         skipped_count = 0
@@ -183,3 +232,4 @@ class SyncManager:
             "failed_count": failed_count,
             "details": details
         }
+

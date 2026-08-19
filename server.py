@@ -38,8 +38,20 @@ class TestLoginModel(BaseModel):
     password: str
     mfa_code: Optional[str] = None
 
+class AuthPayloadModel(BaseModel):
+    renpho_email: Optional[str] = None
+    renpho_password: Optional[str] = None
+    garmin_email: Optional[str] = None
+    garmin_password: Optional[str] = None
+    mfa_code: Optional[str] = None
+    limit: Optional[int] = 50
+
 class SyncSingleModel(BaseModel):
     measurement: Dict[str, Any]
+    renpho_email: Optional[str] = None
+    renpho_password: Optional[str] = None
+    garmin_email: Optional[str] = None
+    garmin_password: Optional[str] = None
 
 @app.get("/api/config")
 def get_config():
@@ -116,28 +128,68 @@ def test_garmin(payload: TestLoginModel):
         logger.error(f"Test Garmin error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/measurements")
-def get_measurements(limit: int = 50):
+@app.api_route("/api/measurements", methods=["GET", "POST"])
+def get_measurements(payload: Optional[AuthPayloadModel] = Body(None), limit: int = 50):
     try:
-        measurements = sync_manager.fetch_measurements(limit=limit)
+        req_limit = payload.limit if (payload and payload.limit) else limit
+        r_email = payload.renpho_email if payload else None
+        r_pw = payload.renpho_password if payload else None
+        g_email = payload.garmin_email if payload else None
+        g_pw = payload.garmin_password if payload else None
+        mfa = payload.mfa_code if payload else None
+
+        measurements = sync_manager.fetch_measurements(
+            limit=req_limit,
+            renpho_email=r_email,
+            renpho_password=r_pw,
+            garmin_email=g_email,
+            garmin_password=g_pw,
+            mfa_code=mfa
+        )
         return {"status": "success", "measurements": measurements}
     except Exception as e:
         logger.error(f"Get measurements error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/sync/latest")
-def sync_latest():
+def sync_latest(payload: Optional[AuthPayloadModel] = Body(None)):
     try:
-        res = sync_manager.sync_latest()
+        r_email = payload.renpho_email if payload else None
+        r_pw = payload.renpho_password if payload else None
+        g_email = payload.garmin_email if payload else None
+        g_pw = payload.garmin_password if payload else None
+        mfa = payload.mfa_code if payload else None
+
+        res = sync_manager.sync_latest(
+            renpho_email=r_email,
+            renpho_password=r_pw,
+            garmin_email=g_email,
+            garmin_password=g_pw,
+            mfa_code=mfa
+        )
         return res
     except Exception as e:
         logger.error(f"Sync latest error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/sync/batch")
-def sync_batch(limit: int = 100):
+def sync_batch(payload: Optional[AuthPayloadModel] = Body(None), limit: int = 100):
     try:
-        res = sync_manager.sync_all_unsynced(limit=limit)
+        req_limit = payload.limit if (payload and payload.limit) else limit
+        r_email = payload.renpho_email if payload else None
+        r_pw = payload.renpho_password if payload else None
+        g_email = payload.garmin_email if payload else None
+        g_pw = payload.garmin_password if payload else None
+        mfa = payload.mfa_code if payload else None
+
+        res = sync_manager.sync_all_unsynced(
+            limit=req_limit,
+            renpho_email=r_email,
+            renpho_password=r_pw,
+            garmin_email=g_email,
+            garmin_password=g_pw,
+            mfa_code=mfa
+        )
         return res
     except Exception as e:
         logger.error(f"Sync batch error: {e}")
@@ -146,7 +198,17 @@ def sync_batch(limit: int = 100):
 @app.post("/api/sync/single")
 def sync_single(payload: SyncSingleModel):
     try:
-        sync_manager.initialize_clients()
+        r_email = payload.renpho_email
+        r_pw = payload.renpho_password
+        g_email = payload.garmin_email
+        g_pw = payload.garmin_password
+
+        sync_manager.initialize_clients(
+            renpho_email=r_email,
+            renpho_password=r_pw,
+            garmin_email=g_email,
+            garmin_password=g_pw
+        )
         m_dict = payload.measurement
         res = sync_manager.garmin.push_body_composition(m_dict)
         

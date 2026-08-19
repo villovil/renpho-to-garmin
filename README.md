@@ -1,23 +1,40 @@
 # Renpho to Garmin Sync
 
-Automated sync tool for transferring body composition scale measurements from Renpho to Garmin Connect.
+Automated sync tool for transferring body composition scale measurements from Renpho to Garmin Connect. Supports both local single-user desktop mode and multi-user web deployment on **Vercel**.
 
 ## Features
 
-- Synchronizes weight, body fat %, muscle mass, hydration, bone mass, BMI, visceral fat, metabolic age, and BMR.
-- Web UI and REST API for setup, manual sync, batch sync, and viewing history.
-- Garmin MFA (2-factor authentication) support with session token caching via Garth.
+- **Comprehensive Body Composition Sync**: Synchronizes weight, body fat %, muscle mass, hydration, bone mass, BMI, visceral fat, metabolic age, and BMR.
+- **Stateless & Private Multi-User Web App**: Users enter their own Renpho and Garmin login details in the browser. Credentials are processed in-memory for the sync request and **never saved on the server disk or database**.
+- **Garmin 2FA / MFA Support**: Handles Multi-Factor Authentication codes cleanly.
+- **Browser Persistence**: Option to remember credentials in the user's browser `localStorage` with a 1-click **"Clear Saved Credentials"** button.
+- **Desktop UI & REST API**: Includes a modern Web Dashboard as well as Python CLI and FastAPI REST API.
 
-## Setup Instructions
+---
+
+## ⚡ Deployment to Vercel (Multi-User Host)
+
+1. **Import to Vercel**:
+   - Go to [Vercel Dashboard](https://vercel.com/new).
+   - Import your GitHub repository (`blagdon/renpho-to-garmin`).
+   - Vercel automatically detects `vercel.json` and builds both the React frontend and Python serverless API.
+
+2. **Deploy**:
+   - Click **Deploy**.
+   - No environment variables or server database setup required! Users log in directly via the web interface.
+
+---
+
+## 💻 Local Desktop Run
 
 1. **Clone the repository**:
    ```bash
-   git clone <your-repo-url>
-   cd "Renpho to Garmin"
+   git clone https://github.com/blagdon/renpho-to-garmin.git
+   cd renpho-to-garmin
    ```
 
-2. **Configure your credentials**:
-   Copy `config.json.example` to `config.json` and enter your Renpho and Garmin login details:
+2. **Configure your credentials (Optional)**:
+   Copy `config.json.example` to `config.json` and enter your Renpho and Garmin login details for automated local single-user runs:
    ```bash
    cp config.json.example config.json
    ```
@@ -27,4 +44,4 @@ Automated sync tool for transferring body composition scale measurements from Re
    ```bash
    python start_app.py
    ```
-   Or run `run_app.bat` on Windows.
+   Or double-click `run_app.bat` on Windows.

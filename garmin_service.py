@@ -3,10 +3,22 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 
+import tempfile
+
 logger = logging.getLogger(__name__)
 
-# Directory for storing persistent garth session tokens
-GARTH_HOME = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".garth")
+def get_garth_home() -> str:
+    if os.environ.get("VERCEL"):
+        path = os.path.join(tempfile.gettempdir(), ".garth")
+    else:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".garth")
+    try:
+        os.makedirs(path, exist_ok=True)
+        return path
+    except Exception:
+        fallback = os.path.join(tempfile.gettempdir(), ".garth")
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
 
 class GarminService:
     def __init__(self, email: str = "", password: str = ""):
@@ -26,7 +38,7 @@ class GarminService:
 
         from garminconnect import Garmin
 
-        os.makedirs(GARTH_HOME, exist_ok=True)
+        garth_dir = get_garth_home()
 
         prompt_func = (lambda: mfa_code) if mfa_code else None
 
@@ -38,9 +50,9 @@ class GarminService:
                 prompt_mfa=prompt_func
             )
 
-            # login(tokenstore=GARTH_HOME) will automatically load cached session tokens if present,
-            # or perform fresh authentication and persist tokens into GARTH_HOME.
-            self.client.login(tokenstore=GARTH_HOME)
+            # login(tokenstore=garth_dir) will automatically load cached session tokens if present,
+            # or perform fresh authentication and persist tokens into garth_dir.
+            self.client.login(tokenstore=garth_dir)
             
             self._is_logged_in = True
             logger.info("Successfully authenticated with Garmin Connect.")
