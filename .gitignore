@@ -1,0 +1,23 @@
+# Security & Credentials
+config.json
+.garth/
+sync_history.json
+*.log
+
+# Python
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+
+# Frontend & Node
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# Operating System & Editor Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

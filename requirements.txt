@@ -1,0 +1,9 @@
+renpho-api
+garminconnect
+garth
+fastapi
+uvicorn
+pydantic
+python-dotenv
+cryptography
+requests
