@@ -25,7 +25,7 @@ Automated sync tool for transferring body composition scale measurements from Re
 
 ---
 
-## 💻 Local Desktop Run
+## 💻 Linux (Ubuntu) Desktop
 
 1. **Clone the repository**:
    ```bash
@@ -39,9 +39,41 @@ Automated sync tool for transferring body composition scale measurements from Re
    cp config.json.example config.json
    ```
    *Note: `config.json` is git-ignored to prevent committing your password.*
+   
 
-3. **Run the Application**:
+3. **Setup the Python environment**:
+   ```bash
+   sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+
+   ```
+   
+4. **Run the Application**:
    ```bash
    python start_app.py
    ```
-   Or double-click `run_app.bat` on Windows.
+
+---
+
+## 💻 Docker Compose Deployment
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/villovil/renpho-to-garmin.git
+   cd renpho-to-garmin
+   ```
+
+2. **Configure your credentials (Optional)**:
+   Copy `config.json.example` to `config.json` and enter your Renpho and Garmin login details for automated local single-user runs:
+   ```bash
+   cp config.json.example config.json
+   ```
+   *Note: `config.json` is git-ignored to prevent committing your password.*
+
+3. **Setup the Python environment**:
+   ```bash
+   docker compose up -d
+   ```
+   *Note: Point your browser to http://localhost:8000*
