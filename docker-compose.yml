@@ -1,0 +1,9 @@
+services:
+  renpho-to-garmin:
+    build: .
+    container_name: renpho-to-garmin
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.json:/app/config.json:ro   # optional: pre-loaded credentials
+    restart: unless-stopped   
