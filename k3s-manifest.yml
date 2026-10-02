@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: renpho
+
+---
+# This secret holds the credentials and settings that will be loaded into the /app/config.json file
+apiVersion: v1
+kind: Secret
+metadata:
+  name: renpho-config
+  namespace: renpho
+type: Opaque
+stringData:
+  config.json: |
+    {
+      "renpho_email": "...",
+      "renpho_password": "...",
+      "garmin_email": "...",
+      "garmin_password": "...",
+      "weight_unit": "kg",
+      "auto_sync": false
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: renpho-to-garmin
+  namespace: renpho
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: renpho-to-garmin
+  template:
+    metadata:
+      labels:
+        app: renpho-to-garmin
+    spec:
+      containers:
+        - name: app
+          # I've pre-created an image and hosted it on my github, but you could do the same
+          image: ghcr.io/villovil/renpho-to-garmin:0.10
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.json
+              subPath: config.json
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          secret:
+            secretName: renpho-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scale-svc
+  namespace: renpho
+spec:
+  selector:
+    app: renpho-to-garmin
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: scale-ingress
+  namespace: renpho
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: scale.homedomain.local   # or use a path-based rule
+      http:
+        paths:
+          - pathType: Prefix
+            backend:
+              service:
+                name: scale-svc
+                port:
+                  number: 80
+            path: /
